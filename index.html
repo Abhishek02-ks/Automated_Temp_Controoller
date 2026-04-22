@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Saffron Climate Controller — AI Dashboard</title>
+  <meta name="description"
+    content="AI-powered automated temperature controller for indoor saffron cultivation. Monitor IoT sensors and predict future temperatures with LSTM." />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap"
+    rel="stylesheet" />
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* ═════════════════════════════
+       RESET & TOKENS
+    ═════════════════════════════ */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --accent: #4f46e5;
+      --accent-hover: #4338ca;
+      --text: #0f172a;
+      --muted: #64748b;
+      --green: #10b981;
+      --red: #ef4444;
+      --orange: #f59e0b;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      --radius: 12px;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding-bottom: 60px;
+    }
+
+    .wrapper {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 0 16px;
+    }
+
+    /* ── Header ── */
+    header {
+      padding: 32px 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header-text h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .header-text p {
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .header-pill {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--green);
+      background: #ecfdf5;
+      padding: 6px 12px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ── Grid ── */
+    .panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    @media (max-width: 768px) {
+      .panels {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ── Cards ── */
+    .section-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .card-subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+
+    /* ── Forms ── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 14px;
+      background: #fff;
+    }
+
+    .btn-predict {
+      width: 100%;
+      padding: 10px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-predict:hover {
+      background: var(--accent-hover);
+    }
+
+    /* ── Metrics ── */
+    .metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .metric {
+      padding: 16px;
+      background: #f1f5f9;
+      border-radius: 8px;
+    }
+
+    .metric-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .metric-value {
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .metric-value.temp {
+      color: var(--orange);
+    }
+
+    .metric-value.humid {
+      color: var(--accent);
+    }
+
+    /* ── Fan ── */
+    .fan-status {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+
+    .fan-indicator {
+      font-size: 20px;
+    }
+
+    .fan-indicator.on {
+      animation: spin 2s linear infinite;
+    }
+
+    .fan-info strong {
+      font-size: 14px;
+      display: block;
+    }
+
+    .fan-info span {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .fan-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .fan-badge.on {
+      background: #dcfce7;
+      color: var(--green);
+    }
+
+    .fan-badge.off {
+      background: #fee2e2;
+      color: var(--red);
+    }
+
+    .override-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .btn-fan {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-fan.on:hover {
+      background: #f0fdf4;
+      border-color: var(--green);
+    }
+
+    .btn-fan.off:hover {
+      background: #fef2f2;
+      border-color: var(--red);
+    }
+
+    /* ── Extras ── */
+    .chart-wrap {
+      height: 200px;
+      margin-top: 12px;
+    }
+
+    .predict-result {
+      margin-top: 20px;
+      padding: 16px;
+      background: #eef2ff;
+      border-radius: 8px;
+    }
+
+    .predict-result-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .offline-banner {
+      display: none;
+      padding: 8px 12px;
+      background: #fef2f2;
+      color: var(--red);
+      border-radius: 6px;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+
+    .offline-banner.visible {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .time-hint {
+      font-size: 12px;
+      color: var(--accent);
+      cursor: pointer;
+      margin-top: 8px;
+      display: inline-block;
+    }
+
+    .last-updated {
+      font-size: 11px;
+      color: var(--muted);
+      text-align: right;
+      margin-top: 12px;
+    }
+
+    @keyframes spin {
+      from {
+        transform: rotate(0deg);
+      }
+
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="wrapper">
+    <header>
+      <div class="header-text">
+        <h1>Saffron Climate Controller</h1>
+        <p>AI Temperature Management System</p>
+      </div>
+      <div class="header-pill" id="serverPill">System Online</div>
+    </header>
+
+    <div class="panels">
+      <!-- PANEL 1 -->
+      <div>
+        <p class="section-label">AI Simulation</p>
+        <div class="card">
+          <p class="card-title">Temperature Predictor</p>
+          <p class="card-subtitle">Generate a seasonal profile based on historical saffron data (Oct–Jan).</p>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="inputHour">Hour (0–23)</label>
+              <input type="number" id="inputHour" min="0" max="23" placeholder="10" />
+            </div>
+            <div class="form-group">
+              <label for="inputDay">Day (1–31)</label>
+              <input type="number" id="inputDay" min="1" max="31" placeholder="15" />
+            </div>
+            <div class="form-group">
+              <label for="inputMonth">Month (Oct-Jan)</label>
+              <select id="inputMonth">
+                <option value="10">October</option>
+                <option value="11">November</option>
+                <option value="12">December</option>
+                <option value="1">January</option>
+              </select>
+            </div>
+          </div>
+
+          <button class="btn-predict" id="btnPredict" onclick="runPredict()">
+            Predict Temperature
+          </button>
+
+          <p class="time-hint" onclick="fillCurrentTime()">↖ Use current time</p>
+
+          <!-- Result -->
+          <div class="predict-result" id="predictResult">
+            <div class="predict-result-label">Predicted Profile Temperature</div>
+            <div class="predict-result-value" id="predictValue">—</div>
+            <div class="predict-result-sub" id="predictSub"></div>
+          </div>
+          <div class="predict-error" id="predictError"></div>
+        </div>
+      </div>
+
+      <!-- PANEL 2 -->
+      <div>
+        <p class="section-label">Live Monitoring</p>
+        <div class="card">
+          <p class="card-title">Device Status</p>
+          <p class="card-subtitle">Real-time data from ESP32 sensors (2s intervals).</p>
+
+          <!-- Offline banner -->
+          <div class="offline-banner" id="offlineBanner">
+            ⚠️ Sensor ESP32 is offline — showing last known values.
+          </div>
+
+          <!-- Metrics -->
+          <div class="metrics">
+            <div class="metric">
+              <div class="metric-label">Current Temp</div>
+              <div class="metric-value temp" id="mCurrentTemp">—<span class="metric-unit">°C</span></div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Humidity</div>
+              <div class="metric-value humid" id="mHumidity">—<span class="metric-unit">%</span></div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">AI Predicted</div>
+              <div class="metric-value predict" id="mPredicted">—<span class="metric-unit">°C</span></div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Δ Temp</div>
+              <div class="metric-value" id="mDelta">—<span class="metric-unit">°C</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Fan status -->
+          <div class="fan-status">
+            <div class="fan-indicator off" id="fanIndicator">🌀</div>
+            <div class="fan-info">
+              <strong id="fanTitle">Cooling Fan: OFF</strong>
+              <span>Autonomous AI Control Active</span>
+            </div>
+            <span class="fan-badge off" id="fanBadge">UNKNOWN</span>
+          </div>
+
+          <!-- 24h chart -->
+          <div class="chart-wrap">
+            <canvas id="historyChart"></canvas>
+          </div>
+
+          <p class="last-updated" id="lastUpdated">Not yet polled</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    
+    const API_BASE = 'http://localhost:5000';
+    const POLL_MS = 2000;
+
+    
+    let chart = null;
+
+    function initChart() {
+      const ctx = document.getElementById('historyChart').getContext('2d');
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'Current Temp (°C)',
+              data: [],
+              borderColor: '#f97316',
+              backgroundColor: 'rgba(249,115,22,0.08)',
+              borderWidth: 2,
+              pointRadius: 3,
+              pointBackgroundColor: '#f97316',
+              tension: 0.4,
+              fill: true
+            },
+            {
+              label: 'Predicted Temp (°C)',
+              data: [],
+              borderColor: '#818cf8',
+              backgroundColor: 'rgba(129,140,248,0.06)',
+              borderWidth: 2,
+              pointRadius: 3,
+              pointBackgroundColor: '#818cf8',
+              tension: 0.4,
+              fill: true,
+              borderDash: [5, 3]
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              labels: {
+                color: '#94a3b8',
+                font: { family: 'Inter', size: 11 },
+                boxWidth: 12,
+                padding: 12
+              }
+            },
+            tooltip: {
+              backgroundColor: '#1a1a2e',
+              borderColor: 'rgba(255,255,255,0.08)',
+              borderWidth: 1,
+              titleColor: '#e2e8f0',
+              bodyColor: '#94a3b8',
+              callbacks: {
+                label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}°C`
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: '#64748b', font: { size: 10 } },
+              grid: { color: 'rgba(255,255,255,0.04)' }
+            },
+            y: {
+              ticks: {
+                color: '#64748b',
+                font: { size: 10 },
+                callback: v => v + '°C'
+              },
+              grid: { color: 'rgba(255,255,255,0.04)' }
+            }
+          }
+        }
+      });
+    }
+
+    function updateChart(history) {
+      if (!chart || !history || history.length === 0) return;
+      chart.data.labels = history.map(h => h.time);
+      chart.data.datasets[0].data = history.map(h => h.current_temp);
+      chart.data.datasets[1].data = history.map(h => h.predicted_temp);
+      chart.update('none');
+    }
+
+    /* ── Panel 2: poll /status ── */
+    async function pollStatus() {
+      try {
+        const r = await fetch(`${API_BASE}/status`, { signal: AbortSignal.timeout(4000) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const d = await r.json();
+
+        /* offline banner */
+        const offline = document.getElementById('offlineBanner');
+        if (!d.sensor_online) {
+          offline.classList.add('visible');
+        } else {
+          offline.classList.remove('visible');
+        }
+
+        /* metrics */
+        setMetric('mCurrentTemp', d.current_temp, '°C');
+        setMetric('mHumidity', d.humidity, '%');
+        setMetric('mPredicted', d.predicted_temp, '°C');
+
+        if (d.current_temp !== null && d.predicted_temp !== null) {
+          const delta = (d.current_temp - d.predicted_temp).toFixed(1);
+          const sign = delta > 0 ? '+' : '';
+          document.getElementById('mDelta').innerHTML =
+            `${sign}${delta}<span class="metric-unit">°C</span>`;
+        }
+
+        /* Fan Update */
+        const fanState = (d.fan_state || 'off').toLowerCase();
+        const indicator = document.getElementById('fanIndicator');
+        const badge = document.getElementById('fanBadge');
+        indicator.className = `fan-indicator ${fanState}`;
+        badge.className = `fan-badge ${fanState}`;
+        badge.textContent = fanState.toUpperCase();
+        document.getElementById('fanTitle').textContent = `Cooling Fan: ${fanState.toUpperCase()}`;
+
+        /* chart */
+        updateChart(d.history);
+
+        /* last updated */
+        const ts = d.last_updated
+          ? new Date(d.last_updated).toLocaleTimeString()
+          : '—';
+        document.getElementById('lastUpdated').textContent = `Last updated: ${ts}`;
+      } catch {
+        document.getElementById('serverPill').textContent = 'API Offline';
+        document.getElementById('serverPill').style.color = 'var(--red)';
+      }
+    }
+
+    function setMetric(id, value, unit) {
+      const el = document.getElementById(id);
+      if (value === null || value === undefined) {
+        el.innerHTML = `—<span class="metric-unit">${unit}</span>`;
+      } else {
+        el.innerHTML = `${Number(value).toFixed(1)}<span class="metric-unit">${unit}</span>`;
+      }
+    }
+
+    /* ── Panel 1: prediction ── */
+    async function runPredict() {
+      const btn = document.getElementById('btnPredict');
+      const resultEl = document.getElementById('predictResult');
+      const errorEl = document.getElementById('predictError');
+      const valueEl = document.getElementById('predictValue');
+      const subEl = document.getElementById('predictSub');
+
+      // Validate
+      const hour = parseInt(document.getElementById('inputHour').value);
+      const day = parseInt(document.getElementById('inputDay').value);
+      const month = parseInt(document.getElementById('inputMonth').value);
+
+      if (isNaN(hour) || hour < 0 || hour > 23 ||
+        isNaN(day) || day < 1 || day > 31 ||
+        isNaN(month) || month < 1 || month > 12) {
+        errorEl.textContent = '⚠ Please enter valid values: Hour 0–23, Day 1–31, Month 1–12.';
+        errorEl.classList.add('visible');
+        resultEl.classList.remove('visible');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = '⏳ Predicting...';
+      errorEl.classList.remove('visible');
+      resultEl.classList.remove('visible');
+
+      try {
+        const url = `${API_BASE}/predict?hour=${hour}&day=${day}&month=${month}`;
+        const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+        if (!r.ok) throw new Error('Server returned ' + r.status);
+        const d = await r.json();
+
+        const pt = d.predicted_temperature ?? 0;
+
+        valueEl.textContent = `${Number(pt).toFixed(1)}°C`;
+        subEl.textContent = `Target Profile: ${monthName(month)} ${day}, ${hour}:00`;
+        resultEl.classList.add('visible');
+
+      } catch (e) {
+        errorEl.textContent = '❌ Simulation failed: ' + e.message;
+        errorEl.classList.add('visible');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '⚡ Generate Profile';
+      }
+    }
+
+    /* ── Helpers ── */
+    function fillCurrentTime() {
+      const now = new Date();
+      const m = now.getMonth() + 1;
+      document.getElementById('inputHour').value = now.getHours();
+      document.getElementById('inputDay').value = now.getDate();
+
+      // Only set month if it's in our allowed range (10,11,12,1)
+      const allowed = ['10', '11', '12', '1'];
+      if (allowed.includes(String(m))) {
+        document.getElementById('inputMonth').value = m;
+      } else {
+        document.getElementById('inputMonth').value = '10'; // Default to Oct
+      }
+    }
+
+    function monthName(m) {
+      return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1] || m;
+    }
+
+    /* ── Init ── */
+    window.addEventListener('DOMContentLoaded', () => {
+      initChart();
+      fillCurrentTime();      // pre-fill with current time
+      pollStatus();           // first poll immediately
+      setInterval(pollStatus, POLL_MS);
+    });
+
+    /* Enter key on inputs triggers predict */
+    ['inputHour', 'inputDay', 'inputMonth'].forEach(id => {
+      document.getElementById(id).addEventListener('keydown', e => {
+        if (e.key === 'Enter') runPredict();
+      });
+    });
+  </script>
+</body>
+
+</html>

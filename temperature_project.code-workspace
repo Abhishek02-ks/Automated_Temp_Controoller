@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"name": "esp32_sensor",
+			"path": "esp32_sensor"
+		},
+		{
+			"name": "esp32_fan",
+			"path": "esp32_fan"
+		}
+	],
+	"settings": {}
+}
