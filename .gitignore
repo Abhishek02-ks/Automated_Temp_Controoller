@@ -10,9 +10,7 @@ env/
 # VS Code
 .vscode/
 
-# Large/generated files
-*.h5
-*.csv
+# Large files are tracked via Git LFS (.gitattributes)
 
 # OS
 Thumbs.db
